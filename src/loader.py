@@ -5,7 +5,7 @@ from docx import Document
 from pypdf import PdfReader
 
 
-SUPPORTED_EXTENSIONS = {".txt", ".pdf", ".docx"}
+SUPPORTED_EXTENSIONS = {".txt", ".text", ".pdf", ".docx"}
 
 
 def load_txt(file_path: str) -> str:
@@ -76,7 +76,7 @@ def load_documents(folder_path: str) -> List[Dict[str, Any]]:
         if extension not in SUPPORTED_EXTENSIONS:
             continue
 
-        if extension == ".txt":
+        if extension in {".txt", ".text"}:
             text = load_txt(str(file_path))
             if text.strip():
                 documents.append({"text": text, "source": file_path.name})

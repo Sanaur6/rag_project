@@ -1,12 +1,13 @@
 import os
+import re
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import faiss
 import numpy as np
 from dotenv import load_dotenv
 from google import genai
-from sentence_transformers import SentenceTransformer
 
 from src.loader import chunk_text, load_documents
 
@@ -27,12 +28,49 @@ class RAGSystem:
         self.chunk_size = chunk_size
         self.overlap = overlap
 
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedder = None
         self.api_key = os.getenv("GEMINI_API_KEY")
+        self.vocab: List[str] = []
+        self.vocab_index: Dict[str, int] = {}
 
         self.chunks: List[Dict[str, Any]] = self._load_chunks()
         self.embeddings = self._get_embeddings()
         self.index: Optional[faiss.Index] = self._build_index()
+
+    def _tokenize(self, text: str) -> List[str]:
+        return re.findall(r"[a-zA-Z0-9]+(?:'[a-zA-Z0-9]+)?", text.lower())
+
+    def _build_vocabulary(self) -> None:
+        tokens: set[str] = set()
+        for chunk in self.chunks:
+            tokens.update(self._tokenize(chunk.get("text", "")))
+
+        self.vocab = sorted(tokens)
+        self.vocab_index = {token: idx for idx, token in enumerate(self.vocab)}
+
+    def _encode_texts(self, texts: List[str]) -> np.ndarray:
+        if not texts:
+            return np.empty((0, 0), dtype=np.float32)
+
+        if not self.vocab:
+            self._build_vocabulary()
+
+        if not self.vocab:
+            return np.zeros((len(texts), 1), dtype=np.float32)
+
+        vectors = np.zeros((len(texts), len(self.vocab)), dtype=np.float32)
+
+        for row_index, text in enumerate(texts):
+            token_counts = Counter(self._tokenize(text))
+            for token, count in token_counts.items():
+                idx = self.vocab_index.get(token)
+                if idx is not None:
+                    vectors[row_index, idx] = float(count)
+
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        vectors = vectors / norms
+        return vectors.astype(np.float32)
 
     def _load_chunks(self) -> List[Dict[str, Any]]:
         raw_documents = load_documents(str(self.docs_folder))
@@ -55,13 +93,9 @@ class RAGSystem:
         if not self.chunks:
             return np.empty((0, 0), dtype=np.float32)
 
+        self._build_vocabulary()
         texts = [chunk["text"] for chunk in self.chunks]
-        vectors = self.embedder.encode(
-            texts,
-            convert_to_numpy=True,
-            show_progress_bar=False,
-        )
-        return np.asarray(vectors, dtype=np.float32)
+        return self._encode_texts(texts)
 
     def _build_index(self) -> Optional[faiss.Index]:
         if self.embeddings.size == 0:
@@ -81,12 +115,9 @@ class RAGSystem:
         limit = top_k if top_k is not None else self.top_k
         limit = max(1, min(limit, len(self.chunks)))
 
-        query_vector = self.embedder.encode(
-            [question],
-            convert_to_numpy=True,
-            show_progress_bar=False,
-        )
-        query_vector = np.asarray(query_vector, dtype=np.float32)
+        query_vector = self._encode_texts([question])
+        if query_vector.size == 0:
+            return []
         faiss.normalize_L2(query_vector)
 
         scores, indices = self.index.search(query_vector, limit)
