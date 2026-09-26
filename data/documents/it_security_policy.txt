@@ -1,0 +1,39 @@
+IT Security Policy
+
+Password Requirements:
+All employees must use strong passwords for company accounts. Passwords should contain a combination of uppercase letters, lowercase letters, numbers, and special characters.
+
+Password Changes:
+Company account passwords must be changed every 90 days if prompted by the organization's security system.
+
+Multi-Factor Authentication:
+Multi-factor authentication is mandatory for email, VPN, cloud infrastructure, and other systems classified as critical by the IT department.
+
+Device Security:
+Employees must keep company laptops and workstations protected with the latest security updates and antivirus software.
+
+Public Wi-Fi:
+Employees should avoid accessing sensitive company systems through unsecured public Wi-Fi networks. When remote access is necessary, employees must use the company VPN.
+
+Data Classification:
+Company information is classified into four categories: Public, Internal, Confidential, and Restricted.
+
+Confidential Information:
+
+
+
+
+Confidential information must only be shared with authorized employees or approved external parties.
+
+Restricted Information:
+Restricted information includes customer credentials, financial records, security keys, API keys, and other highly sensitive information. Such information must never be shared through public messaging platforms or personal email accounts.
+
+API Keys:
+API keys and other authentication credentials must be stored securely using approved secret-management systems or environment variables. They must never be hard-coded into source code committed to a public repository.
+
+Security Incident:
+Employees who suspect a security breach, phishing attack, lost company device, or accidental disclosure of confidential information must immediately contact the IT security team.
+
+Phishing:
+Employees must not click suspicious links or download unexpected attachments from unknown senders. Suspicious emails should be reported to the IT security team.
+...................................
