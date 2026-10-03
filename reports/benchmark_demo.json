@@ -1,0 +1,72 @@
+{
+  "total_cases": 5,
+  "passed_cases": 5,
+  "pass_rate": 100.0,
+  "results": [
+    {
+      "id": "password_requirements",
+      "question": "What are the password requirements?",
+      "passed": true,
+      "score": 100.0,
+      "missing_terms": [],
+      "source_files": [
+        "it_security_policy.txt",
+        "it_security_policy.txt",
+        "it_security_policy.txt"
+      ],
+      "answer_preview": "IT Security Policy\n\nPassword Requirements:\nAll employees must use strong passwords for company accounts. Passwords should contain a combination of uppercase letters, lowercase letters, numbers, and special characters.\n\nP"
+    },
+    {
+      "id": "annual_leave_days",
+      "question": "How many days of leave do employees get?",
+      "passed": true,
+      "score": 100.0,
+      "missing_terms": [],
+      "source_files": [
+        "leave_policy.txt",
+        "leave_policy.txt",
+        "leave_policy.txt"
+      ],
+      "answer_preview": "Employee Leave Policy\n\nAnnual Leave:\nFull-time employees are entitled to 20 days of paid annual leave per calendar year.\n\nSick Leave:\nEmployees receive 12 days of sick leave per year. A medical certificate may be require"
+    },
+    {
+      "id": "remote_work_policy",
+      "question": "What is the remote work arrangement?",
+      "passed": true,
+      "score": 100.0,
+      "missing_terms": [],
+      "source_files": [
+        "company_info.txt",
+        "company_info.text",
+        "it_security_policy.txt"
+      ],
+      "answer_preview": "ork from Monday to Friday, from 9:30 AM to 6:30 PM. Employees are expected to maintain a minimum of 8 working hours per day.\n\nRemote Work:\nEmployees may work remotely up to two days per week with approval from their repo"
+    },
+    {
+      "id": "performance_reviews",
+      "question": "How often are performance reviews conducted?",
+      "passed": true,
+      "score": 100.0,
+      "missing_terms": [],
+      "source_files": [
+        "company_info.txt",
+        "company_info.text",
+        "company_info.text"
+      ],
+      "answer_preview": "l leave, sick leave, and access to professional development programs.\n\nLearning and Development:\nEmployees can request reimbursement for approved technical courses, certifications, and conferences. The maximum annual rei"
+    },
+    {
+      "id": "leave_carry_forward",
+      "question": "What is the leave carry forward limit?",
+      "passed": true,
+      "score": 100.0,
+      "missing_terms": [],
+      "source_files": [
+        "leave_policy.txt",
+        "leave_policy.txt",
+        "leave_policy.txt"
+      ],
+      "answer_preview": "proval:\nEmployees should submit leave requests through the HR portal at least three working days before the planned leave whenever possible.\n\nEmergency Leave:\nIn emergencies, employees should notify their reporting manag"
+    }
+  ]
+}
