@@ -9,6 +9,7 @@ This project is a small document-based RAG system for company policies and emplo
 - optional Gemini embedding-based retrieval when a valid API key is configured
 - source citation display in the CLI and Streamlit app
 - validated TXT, TEXT, PDF, and DOCX uploads with immediate re-indexing in Streamlit
+- SQLite persistence for conversation history, answer feedback, and document metadata
 - evaluation benchmark for measuring answer quality
 
 ## Quick start
@@ -27,27 +28,39 @@ This project is a small document-based RAG system for company policies and emplo
    export GEMINI_API_KEY="your_api_key_here"
    ```
 
-3. Run a smoke check before launching the app:
+3. Configure browser accounts and an API token. Copy `.env.example` to `.env`, then set strong, private passwords for the employee and admin accounts and generate a random API token. `.env` is ignored by Git.
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   Sign into Streamlit with `APP_USERNAME` and `APP_PASSWORD`. The separate `DOCS_ADMIN_USERNAME` and `DOCS_ADMIN_PASSWORD` account has upload and re-index access. `APP_ACCESS_TOKEN` is for API bearer authentication only. The browser sign-in fails closed if the employee account is not configured; API routes fail closed if the API token is missing.
+
+4. Run a smoke check before launching the app:
 
    ```bash
    python smoke_test.py
    ```
 
-4. Run the CLI app:
+5. Run the CLI app:
 
    ```bash
    python app.py
    ```
 
-5. Run the Streamlit app:
+6. Run the Streamlit app:
 
    ```bash
    streamlit run app.py -- --streamlit
    ```
 
-In the Streamlit sidebar, upload TXT, TEXT, PDF, or DOCX files and select **Upload and re-index**. Files are stored in `data/documents` by default; set `DOCS_FOLDER` to use another folder. Each upload is size-limited to 10 MB and is parsed before it is stored.
+   On Windows, run `run_app.bat` from the project folder to ensure the app starts with the project's `myenv` environment.
 
-The current Streamlit interface does not provide user authentication. Keep it bound to a trusted local environment and do not expose it publicly or use it for sensitive company documents until authentication and authorization are added.
+In Streamlit, sign in with the employee account to use the assistant. The **Assistant** page shows the current chat; use **New chat** to clear that view without deleting saved entries. Open **History** to search and review saved questions, answers, and feedback. Admins also have a **Documents** page to upload TXT, TEXT, PDF, or DOCX files, inspect details, download files, and remove outdated documents. Uploads are re-indexed immediately, limited to 10 MB each, and parsed before storage. Files are stored in `data/documents` by default; set `DOCS_FOLDER` to use another folder. SQLite is created at `data/assistant.sqlite3` by default; set `APP_DATABASE_PATH` to use another location. Chat history and feedback are shared by account role, so anyone using the shared employee login can see that role's saved history. Use individual accounts before storing private conversations.
+
+Browser sign-in survives reloads for up to seven days using a revocable session cookie; **Sign out** invalidates it immediately. Set `APP_COOKIE_SECURE=true` when serving over HTTPS. The cookie is managed in the browser and is not HttpOnly, so keep this shared-account app on a trusted network; use an identity provider and per-user accounts for public or sensitive deployments.
+
+The browser uses shared local accounts rather than individual user identities or a full role-management system. The CLI remains local and does not require sign-in. For deployment beyond a trusted environment, add per-user identity/authorization and HTTPS at a trusted reverse proxy; do not expose this development server directly to the internet.
 
 ## Tests
 
@@ -80,10 +93,13 @@ You can run the project as a FastAPI service:
 uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+The API's `/`, `/health`, and `/ask` routes require an `APP_ACCESS_TOKEN` bearer token. For example:
+
 Example request:
 
 ```bash
 curl -X POST http://localhost:8000/ask \
+   -H "Authorization: Bearer your_app_access_token" \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the password requirements?", "top_k": 3}'
 ```

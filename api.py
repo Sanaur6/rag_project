@@ -1,9 +1,11 @@
 import os
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
+from src.auth import token_matches
 from src.rag_system import RAGSystem
 
 
@@ -12,6 +14,22 @@ app = FastAPI(
     version="1.0.0",
     description="HTTP API for querying company policy documents.",
 )
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def require_access_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str:
+    expected_token = os.getenv("APP_ACCESS_TOKEN")
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="API access is not configured.")
+    if credentials is None or not token_matches(credentials.credentials, expected_token):
+        raise HTTPException(
+            status_code=401,
+            detail="A valid bearer token is required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
 
 
 class AskRequest(BaseModel):
@@ -24,7 +42,7 @@ def get_rag() -> RAGSystem:
     return RAGSystem(docs_folder=docs_folder)
 
 
-@app.get("/")
+@app.get("/", dependencies=[Depends(require_access_token)])
 def root() -> dict[str, Any]:
     return {
         "name": "Company RAG Assistant API",
@@ -33,7 +51,7 @@ def root() -> dict[str, Any]:
     }
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[Depends(require_access_token)])
 def health() -> dict[str, Any]:
     try:
         rag = get_rag()
@@ -46,7 +64,7 @@ def health() -> dict[str, Any]:
         return {"status": "error", "detail": str(exc)}
 
 
-@app.post("/ask")
+@app.post("/ask", dependencies=[Depends(require_access_token)])
 def ask(request: AskRequest) -> dict[str, Any]:
     rag = get_rag()
     answer, sources = rag.answer(request.question, top_k=request.top_k, return_sources=True)

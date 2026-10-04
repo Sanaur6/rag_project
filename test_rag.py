@@ -1,6 +1,6 @@
 import pytest
 
-from app import store_uploaded_document
+from app import delete_managed_document, list_managed_documents, store_uploaded_document
 from src.rag_system import RAGSystem
 
 
@@ -55,3 +55,22 @@ def test_upload_rejects_unsupported_and_empty_files(tmp_path):
 
     with pytest.raises(ValueError, match="could not be parsed"):
         store_uploaded_document("broken.pdf", b"not a PDF file", tmp_path)
+
+
+def test_document_management_lists_supported_files_only(tmp_path):
+    (tmp_path / "policy.txt").write_text("Policy", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("Notes", encoding="utf-8")
+    (tmp_path / "nested").mkdir()
+
+    assert [path.name for path in list_managed_documents(tmp_path)] == ["policy.txt"]
+
+
+def test_document_management_deletes_only_supported_files_in_folder(tmp_path):
+    document = tmp_path / "policy.txt"
+    document.write_text("Policy", encoding="utf-8")
+
+    assert delete_managed_document("policy.txt", tmp_path) == document
+    assert not document.exists()
+
+    with pytest.raises(ValueError, match="supported document"):
+        delete_managed_document("../outside.txt", tmp_path)

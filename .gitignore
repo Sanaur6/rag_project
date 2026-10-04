@@ -5,3 +5,5 @@ __pycache__/
 venv/
 
 vector_store/
+
+data/assistant.sqlite3*
