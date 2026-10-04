@@ -1,3 +1,6 @@
+from typing import Any, cast
+from types import SimpleNamespace
+
 import pytest
 
 from app import delete_managed_document, list_managed_documents, store_uploaded_document
@@ -32,6 +35,67 @@ def test_rag_handles_unknown_question_without_crashing():
     assert isinstance(answer, str)
     assert len(answer) > 0
     assert sources == [] or isinstance(sources, list)
+
+
+def test_fallback_answer_prefers_the_most_relevant_source_chunk():
+    rag = RAGSystem(docs_folder="data/documents", use_semantic_embeddings=False)
+    sources = [
+        {
+            "source": "company_info.txt",
+            "text": (
+                "Employees work eight hours per day. Employees may work remotely two days per week. "
+                "Employee benefits include health insurance, paid annual leave, and sick leave."
+            ),
+        },
+        {
+            "source": "leave_policy.txt",
+            "text": "Annual Leave: Full-time employees are entitled to 20 days of paid annual leave per calendar year.",
+        },
+    ]
+
+    answer = rag._fallback_answer("How many days of leave do employees get?", sources)
+
+    assert "20 days" in answer
+
+
+def test_reciprocal_rank_fusion_promotes_candidates_found_by_both_retrievers():
+    rag = RAGSystem(docs_folder="data/documents", use_semantic_embeddings=False)
+    candidates = rag._fuse_ranked_results(
+        [
+            [
+                {"chunk_index": 0, "score": 10.0},
+                {"chunk_index": 1, "score": 9.0},
+            ],
+            [
+                {"chunk_index": 1, "score": 0.9},
+                {"chunk_index": 2, "score": 0.8},
+            ],
+        ]
+    )
+
+    assert [candidate["chunk_index"] for candidate in candidates] == [1, 0, 2]
+
+
+def test_optional_gemini_reranker_reorders_fused_candidates():
+    rag = RAGSystem(docs_folder="data/documents", use_semantic_embeddings=False)
+    rag.api_key = "test-key"
+    rag.use_llm_reranking = True
+    rag._gemini_client = cast(Any, SimpleNamespace(
+        models=SimpleNamespace(
+            generate_content=lambda **kwargs: SimpleNamespace(
+                parsed={"candidate_indices": [1, 0]},
+                text="",
+            )
+        )
+    ))
+    candidates = [
+        {"chunk_index": 0, "text": "Generic policy overview.", "source": "overview.txt"},
+        {"chunk_index": 1, "text": "Annual leave is 20 days.", "source": "leave.txt"},
+    ]
+
+    reranked = rag._rerank_candidates("How many days of annual leave?", candidates)
+
+    assert [candidate["source"] for candidate in reranked] == ["leave.txt", "overview.txt"]
 
 
 def test_uploaded_document_is_searchable_after_reindexing(tmp_path):

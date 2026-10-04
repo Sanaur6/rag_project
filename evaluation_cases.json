@@ -8,7 +8,8 @@
       "lowercase",
       "numbers",
       "special characters"
-    ]
+    ],
+    "expected_sources": ["it_security_policy.txt"]
   },
   {
     "id": "annual_leave_days",
@@ -16,7 +17,8 @@
     "must_have": [
       "20 days",
       "annual leave"
-    ]
+    ],
+    "expected_sources": ["leave_policy.txt"]
   },
   {
     "id": "remote_work_policy",
@@ -25,7 +27,8 @@
       "two days per week",
       "remote work",
       "approval"
-    ]
+    ],
+    "expected_sources": ["company_info.text"]
   },
   {
     "id": "performance_reviews",
@@ -34,7 +37,8 @@
       "twice a year",
       "june",
       "december"
-    ]
+    ],
+    "expected_sources": ["company_info.text"]
   },
   {
     "id": "leave_carry_forward",
@@ -42,6 +46,7 @@
     "must_have": [
       "10 days",
       "carry forward"
-    ]
+    ],
+    "expected_sources": ["leave_policy.txt"]
   }
 ]

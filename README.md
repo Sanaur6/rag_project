@@ -6,6 +6,8 @@ This project is a small document-based RAG system for company policies and emplo
 
 - Document ingestion from TXT, PDF, and DOCX files
 - chunk-based retrieval with keyword scoring
+- hybrid keyword/vector retrieval fused with reciprocal-rank fusion
+- optional Gemini listwise reranking for the strongest final passages
 - optional Gemini embedding-based retrieval when a valid API key is configured
 - source citation display in the CLI and Streamlit app
 - validated TXT, TEXT, PDF, and DOCX uploads with immediate re-indexing in Streamlit
@@ -75,6 +77,31 @@ python benchmark_rag.py
 ```
 
 This script loads the cases in `evaluation_cases.json`, runs the RAG on each question, and prints a pass/fail summary with a pass rate.
+
+The report separates answer-term coverage from retrieved-context coverage and expected-source recall@3. Required source files are configured per case in `evaluation_cases.json`. The CLI quality gate defaults to 100% passing cases, 95% answer-term coverage, and 95% expected-source recall; override thresholds to experiment. GitHub Actions runs the tests and a deterministic, no-Gemini quality gate on pushes and pull requests to `main`, then uploads the JSON report.
+
+Retrieval combines keyword and vector rankings with reciprocal-rank fusion. To enable a final Gemini listwise rerank, set `GEMINI_RERANKER_ENABLED=true` and configure `GEMINI_API_KEY`; this makes one additional Gemini request per query. Reranking is disabled by default, and the RRF path works without an API key.
+
+To run the same CI thresholds locally:
+
+```bash
+python benchmark_rag.py \
+   --min-pass-rate 100 \
+   --min-answer-coverage 95 \
+   --min-source-recall 100 \
+   --output reports/rag-evaluation.json
+```
+
+For optional LLM-as-a-judge metrics, set `GEMINI_API_KEY` and run:
+
+```bash
+python benchmark_rag.py --semantic \
+   --min-faithfulness 0.8 \
+   --min-answer-relevancy 0.8 \
+   --output reports/rag-semantic-evaluation.json
+```
+
+This opt-in mode scores factual claims against retrieved context and separately scores whether each answer addresses its question. It makes two judge requests per case, plus the normal Gemini answer requests; it is intentionally excluded from CI to avoid API costs and keep the default gate deterministic. Set `GEMINI_EVAL_MODEL` to override the default `gemini-2.5-flash` judge model.
 
 To export the benchmark report to a file:
 

@@ -357,36 +357,8 @@ def run_streamlit():
 
     def render_assistant_page():
         rag = st.session_state.rag
-        if st.session_state.auth_role == "admin":
-            title_column, history_link_column, documents_link_column = st.columns(
-                [5, 1, 1], vertical_alignment="center"
-            )
-            title_column.title("What can I help you find?")
-            title_column.caption("Clear answers from your company documents.")
-            history_link_column.page_link(
-                pages[1],
-                label="History",
-                icon=":material/history:",
-                width="stretch",
-            )
-            documents_link_column.page_link(
-                pages[2],
-                label="Documents",
-                icon=":material/folder_open:",
-                width="stretch",
-            )
-        else:
-            title_column, history_link_column = st.columns(
-                [5, 1], vertical_alignment="center"
-            )
-            title_column.title("What can I help you find?")
-            title_column.caption("Clear answers from your company documents.")
-            history_link_column.page_link(
-                pages[1],
-                label="History",
-                icon=":material/history:",
-                width="stretch",
-            )
+        st.title("What can I help you find?")
+        st.caption("Clear answers from your company documents.")
 
         st.markdown("#### Try a question")
         prompt_columns = st.columns(3)
