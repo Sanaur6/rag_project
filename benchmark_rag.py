@@ -189,6 +189,69 @@ def summarize_results(
     }
 
 
+def compare_summaries(current: dict, baseline: dict) -> dict:
+    baseline_cases = {
+        str(result.get("id") or result["question"]): result
+        for result in baseline["results"]
+    }
+    current_cases = {
+        str(result.get("id") or result["question"]): result
+        for result in current["results"]
+    }
+    baseline_ids = set(baseline_cases)
+    current_ids = set(current_cases)
+    shared_ids = baseline_ids & current_ids
+    regressions = []
+
+    for case_id in sorted(shared_ids):
+        baseline_case = baseline_cases[case_id]
+        current_case = current_cases[case_id]
+        if baseline_case.get("passed") and not current_case.get("passed"):
+            regressions.append(
+                {
+                    "case_id": case_id,
+                    "question": current_case["question"],
+                    "metric": "passed",
+                    "baseline": True,
+                    "current": False,
+                }
+            )
+
+        for metric in (
+            "answer_coverage",
+            "context_coverage",
+            "source_recall",
+            "faithfulness",
+            "answer_relevancy",
+        ):
+            baseline_value = baseline_case.get(metric)
+            current_value = current_case.get(metric)
+            if (
+                baseline_value is not None
+                and current_value is not None
+                and current_value < baseline_value
+            ):
+                regressions.append(
+                    {
+                        "case_id": case_id,
+                        "question": current_case["question"],
+                        "metric": metric,
+                        "baseline": baseline_value,
+                        "current": current_value,
+                    }
+                )
+
+    new_cases = sorted(current_ids - baseline_ids)
+    removed_cases = sorted(baseline_ids - current_ids)
+    return {
+        "compared_cases": len(shared_ids),
+        "new_cases": new_cases,
+        "removed_cases": removed_cases,
+        "regressions": regressions,
+        "regression_free": not regressions and not removed_cases,
+    }
+
+
 def export_summary(summary: dict, output_path: str, output_format: str = "json") -> None:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +315,7 @@ def run_benchmark(
     semantic: bool = False,
     min_faithfulness: float | None = None,
     min_answer_relevancy: float | None = None,
+    compare_path: str | None = None,
 ) -> dict:
     if not semantic and (min_faithfulness is not None or min_answer_relevancy is not None):
         raise ValueError("Use --semantic when setting semantic metric thresholds.")
@@ -270,6 +334,21 @@ def run_benchmark(
         min_faithfulness=min_faithfulness,
         min_answer_relevancy=min_answer_relevancy,
     )
+    if compare_path:
+        with Path(compare_path).open("r", encoding="utf-8") as file:
+            baseline = json.load(file)
+        if not isinstance(baseline, dict) or not isinstance(baseline.get("results"), list):
+            raise ValueError("Baseline report must contain a results list.")
+        comparison = compare_summaries(summary, baseline)
+        comparison["baseline_path"] = compare_path
+        summary["comparison"] = comparison
+        if not comparison["regression_free"]:
+            summary["quality_gate_passed"] = False
+            summary["quality_gate_failures"].append(
+                "Baseline comparison failed: "
+                f"{len(comparison['regressions'])} regression(s), "
+                f"{len(comparison['removed_cases'])} removed case(s)."
+            )
 
     print("RAG evaluation summary")
     print("=" * 24)
@@ -292,6 +371,24 @@ def run_benchmark(
     print(f"Answer-term coverage: {summary['answer_coverage']}%")
     print(f"Retrieved-context coverage: {summary['context_coverage']}%")
     print(f"Expected-source recall@3: {summary['source_recall_at_k']}%")
+    if "comparison" in summary:
+        comparison = summary["comparison"]
+        print(
+            "Baseline comparison: "
+            f"{comparison['compared_cases']} shared, "
+            f"{len(comparison['new_cases'])} new, "
+            f"{len(comparison['removed_cases'])} removed case(s)"
+        )
+        for case_id in comparison["new_cases"]:
+            print(f"  NEW | {case_id}")
+        for case_id in comparison["removed_cases"]:
+            print(f"  REMOVED | {case_id}")
+        for regression in comparison["regressions"]:
+            print(
+                f"  REGRESSION | {regression['case_id']} | {regression['metric']}: "
+                f"{regression['baseline']} -> {regression['current']}"
+            )
+        print("Baseline regression gate: " + ("PASS" if comparison["regression_free"] else "FAIL"))
     if summary["faithfulness"] is not None:
         print(f"Mean faithfulness: {summary['faithfulness']}")
         print(f"Mean answer relevancy: {summary['answer_relevancy']}")
@@ -319,6 +416,11 @@ if __name__ == "__main__":
     parser.add_argument("--min-answer-coverage", type=float, default=95.0)
     parser.add_argument("--min-source-recall", type=float, default=95.0)
     parser.add_argument(
+        "--compare",
+        type=str,
+        help="Compare existing cases against a prior JSON benchmark report.",
+    )
+    parser.add_argument(
         "--semantic",
         action="store_true",
         help="Use Gemini as an LLM judge for faithfulness and answer relevancy (requires GEMINI_API_KEY).",
@@ -342,5 +444,6 @@ if __name__ == "__main__":
         semantic=args.semantic,
         min_faithfulness=args.min_faithfulness,
         min_answer_relevancy=args.min_answer_relevancy,
+        compare_path=args.compare,
     )
     raise SystemExit(0 if summary["quality_gate_passed"] else 1)

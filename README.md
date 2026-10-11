@@ -10,8 +10,12 @@ This project is a small document-based RAG system for company policies and emplo
 - optional Gemini listwise reranking for the strongest final passages
 - optional Gemini embedding-based retrieval when a valid API key is configured
 - source citation display in the CLI and Streamlit app
+- downloadable Markdown transcripts with answers and source citations
+- context-aware follow-up questions in the Streamlit chat
 - validated TXT, TEXT, PDF, and DOCX uploads with immediate re-indexing in Streamlit
 - SQLite persistence for conversation history, answer feedback, and document metadata
+- optional issue categories for answers marked not helpful
+- admin feedback dashboard with reviewable benchmark drafts from low-rated answers
 - evaluation benchmark for measuring answer quality
 
 ## Quick start
@@ -58,7 +62,7 @@ This project is a small document-based RAG system for company policies and emplo
 
    On Windows, run `run_app.bat` from the project folder to ensure the app starts with the project's `myenv` environment.
 
-In Streamlit, sign in with the employee account to use the assistant. The **Assistant** page shows the current chat; use **New chat** to clear that view without deleting saved entries. Open **History** to search and review saved questions, answers, and feedback. Admins also have a **Documents** page to upload TXT, TEXT, PDF, or DOCX files, inspect details, download files, and remove outdated documents. Uploads are re-indexed immediately, limited to 10 MB each, and parsed before storage. Files are stored in `data/documents` by default; set `DOCS_FOLDER` to use another folder. SQLite is created at `data/assistant.sqlite3` by default; set `APP_DATABASE_PATH` to use another location. Chat history and feedback are shared by account role, so anyone using the shared employee login can see that role's saved history. Use individual accounts before storing private conversations.
+In Streamlit, sign in with the employee account to use the assistant. The **Assistant** page shows the current chat; follow-up questions can refer to the last few turns, **Download conversation** exports the current exchange with its source citations, and **New chat** clears that view without deleting saved entries. Open **History** to search and review saved questions, answers, and feedback. Admins also have a **Feedback** page with employee rating summaries, frequently asked questions, and low-rated answers with their retrieved sources. The page can download the latest low-rated questions as benchmark drafts; verify the suggested sources and replace required-fact placeholders before adding drafts to `evaluation_cases.json`. The **Documents** page lets admins upload TXT, TEXT, PDF, or DOCX files, inspect details, download files, and remove outdated documents. Uploads are re-indexed immediately, limited to 10 MB each, and parsed before storage. Files are stored in `data/documents` by default; set `DOCS_FOLDER` to use another folder. SQLite is created at `data/assistant.sqlite3` by default; set `APP_DATABASE_PATH` to use another location. Chat history and feedback are shared by account role, so anyone using the shared employee login can see that role's saved history. Use individual accounts before storing private conversations.
 
 Browser sign-in survives reloads for up to seven days using a revocable session cookie; **Sign out** invalidates it immediately. Set `APP_COOKIE_SECURE=true` when serving over HTTPS. The cookie is managed in the browser and is not HttpOnly, so keep this shared-account app on a trusted network; use an identity provider and per-user accounts for public or sensitive deployments.
 
@@ -91,6 +95,16 @@ python benchmark_rag.py \
    --min-source-recall 100 \
    --output reports/rag-evaluation.json
 ```
+
+To compare a run with a saved baseline and fail the quality gate on regressions:
+
+```bash
+python benchmark_rag.py \
+   --compare reports/baseline-before-feedback-iteration.json \
+   --output reports/benchmark-after-change.json
+```
+
+The comparison checks metric changes for shared case IDs, lists new cases separately, and fails if a baseline case is removed.
 
 For optional LLM-as-a-judge metrics, set `GEMINI_API_KEY` and run:
 

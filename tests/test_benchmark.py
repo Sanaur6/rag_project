@@ -1,4 +1,4 @@
-from benchmark_rag import evaluate_case, summarize_results
+from benchmark_rag import compare_summaries, evaluate_case, summarize_results
 
 
 class FakeRAG:
@@ -96,3 +96,82 @@ def test_semantic_scores_are_reported_and_thresholds_are_enforced():
     assert summary["answer_relevancy"] == 0.9
     assert not summary["quality_gate_passed"]
     assert any("faithfulness" in failure for failure in summary["quality_gate_failures"])
+
+
+def test_baseline_comparison_reports_regressions_new_and_removed_cases():
+    baseline = {
+        "results": [
+            {
+                "id": "shared",
+                "question": "Shared case?",
+                "passed": True,
+                "answer_coverage": 100.0,
+                "context_coverage": 100.0,
+                "source_recall": 100.0,
+                "faithfulness": None,
+                "answer_relevancy": None,
+            },
+            {"id": "removed", "question": "Removed case?", "passed": True},
+        ]
+    }
+    current = {
+        "results": [
+            {
+                "id": "shared",
+                "question": "Shared case?",
+                "passed": False,
+                "answer_coverage": 80.0,
+                "context_coverage": 100.0,
+                "source_recall": 50.0,
+                "faithfulness": None,
+                "answer_relevancy": None,
+            },
+            {"id": "new", "question": "New case?", "passed": True},
+        ]
+    }
+
+    comparison = compare_summaries(current, baseline)
+
+    assert comparison["compared_cases"] == 1
+    assert comparison["new_cases"] == ["new"]
+    assert comparison["removed_cases"] == ["removed"]
+    assert [item["metric"] for item in comparison["regressions"]] == [
+        "passed",
+        "answer_coverage",
+        "source_recall",
+    ]
+    assert not comparison["regression_free"]
+
+
+def test_new_cases_do_not_fail_baseline_comparison():
+    baseline = {
+        "results": [
+            {
+                "id": "shared",
+                "question": "Shared case?",
+                "passed": True,
+                "answer_coverage": 100.0,
+                "context_coverage": 100.0,
+                "source_recall": 100.0,
+            }
+        ]
+    }
+    current = {
+        "results": [
+            {
+                "id": "shared",
+                "question": "Shared case?",
+                "passed": True,
+                "answer_coverage": 100.0,
+                "context_coverage": 100.0,
+                "source_recall": 100.0,
+            },
+            {"id": "new", "question": "New case?", "passed": False},
+        ]
+    }
+
+    comparison = compare_summaries(current, baseline)
+
+    assert comparison["new_cases"] == ["new"]
+    assert comparison["regressions"] == []
+    assert comparison["regression_free"]

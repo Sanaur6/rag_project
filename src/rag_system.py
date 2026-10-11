@@ -418,16 +418,212 @@ class RAGSystem:
         )
         return best_source["text"]
 
+    @staticmethod
+    def _is_follow_up_question(question: str) -> bool:
+        normalized_question = " ".join(question.casefold().split())
+        follow_up_phrases = (
+            "what about",
+            "how about",
+            "what if",
+            "and for",
+            "and what",
+            "does that",
+            "is that",
+            "are they",
+            "can they",
+            "tell me more",
+            "why is that",
+            "how does that",
+        )
+        if any(phrase in normalized_question for phrase in follow_up_phrases):
+            return True
+        return bool(
+            re.search(
+                r"\b(?:it|they|them|their|this|that|these|those|same|there)\b",
+                normalized_question,
+            )
+        )
+
+    def _prepare_conversation_context(
+        self,
+        question: str,
+        conversation_history: Optional[List[Dict[str, Any]]],
+    ) -> tuple[str, str]:
+        if not conversation_history or not self._is_follow_up_question(question):
+            return question, ""
+
+        recent_history = conversation_history[-3:]
+        previous_questions = []
+        transcript = []
+        for turn in recent_history:
+            previous_question = str(turn.get("question") or "").strip()[:400]
+            if not previous_question:
+                continue
+            previous_answer = str(turn.get("answer") or "").strip()[:600]
+            previous_questions.append(previous_question)
+            transcript.append(
+                f"Employee: {previous_question}\nAssistant: {previous_answer}"
+            )
+
+        if not previous_questions:
+            return question, ""
+        return " ".join([*previous_questions, question]), "\n\n".join(transcript)
+
+    def build_action_plan(
+        self,
+        question: str,
+        sources: Optional[List[Dict[str, Any]]] = None,
+        user_role: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        normalized_question = " ".join(question.casefold().split())
+        source_text = " ".join(
+            (source.get("text") or "")
+            for source in (sources or [])
+        )
+        combined_text = f"{normalized_question} {source_text}".lower()
+        role = (user_role or "employee").strip().casefold()
+
+        if any(token in combined_text for token in (
+            "annual leave",
+            "sick leave",
+            "casual leave",
+            "maternity leave",
+            "paternity leave",
+            "leave request",
+            "leave approval",
+            "leave",
+        )):
+            intent = "leave_request"
+            summary = "Check the leave policy, follow the approval process, and notify the right person if the request is urgent."
+            base_steps = [
+                "Submit the request through the HR portal at least three working days before the leave date whenever possible.",
+                "Confirm the leave type and eligibility under the company policy before submitting the request.",
+                "If the request is urgent or an emergency, notify your reporting manager immediately and complete the formal request afterward.",
+            ]
+            if role == "manager":
+                base_steps = [
+                    "Review the leave request against policy, approval timing, and team coverage requirements.",
+                    "Confirm whether the request is eligible under leave policy and the employee's leave balance.",
+                    "Approve or escalate the request according to the reporting-manager process and company policy.",
+                ]
+            elif role == "hr":
+                base_steps = [
+                    "Verify the leave entitlement, eligibility, and any special leave rules tied to the employee's status.",
+                    "Record the request in the HR portal and ensure the employee receives the expected approval timeline.",
+                    "Escalate urgent or exceptional leave cases to the relevant manager or policy owner.",
+                ]
+            requires_human_review = True
+        elif any(token in combined_text for token in (
+            "password",
+            "mfa",
+            "multi-factor",
+            "vpn",
+            "security",
+            "phishing",
+            "device security",
+            "incident",
+            "api key",
+        )):
+            intent = "security_action"
+            summary = "Harden your account and follow the security steps required by the IT policies."
+            base_steps = [
+                "Use a strong password with uppercase letters, lowercase letters, numbers, and special characters.",
+                "Enable multi-factor authentication for email, VPN, and other critical systems.",
+                "Use the company VPN for remote access and report suspicious emails or security incidents to the IT security team.",
+            ]
+            if role == "it":
+                base_steps = [
+                    "Verify that the user's account meets the required password and MFA controls before approval.",
+                    "Review VPN, device, and access policies for the impacted user or system.",
+                    "Escalate suspected phishing, breach, or device issues to the IT security team immediately.",
+                ]
+            elif role == "manager":
+                base_steps = [
+                    "Confirm the team member is using the company-approved password and MFA setup for critical systems.",
+                    "Direct employees to the company VPN for remote access and report security concerns to IT.",
+                    "Escalate any suspected phishing or data exposure issue to IT security without delay.",
+                ]
+            requires_human_review = False
+        elif any(token in combined_text for token in (
+            "remote work",
+            "work remotely",
+            "work from home",
+            "remote",
+        )):
+            intent = "remote_work"
+            summary = "Check the remote-work rules and get manager approval before working outside the office."
+            base_steps = [
+                "Confirm the number of remote days allowed under company policy and the approval process.",
+                "Coordinate with your reporting manager before scheduling remote work days.",
+                "Avoid remote work during critical client meetings unless it is explicitly approved.",
+            ]
+            if role == "manager":
+                base_steps = [
+                    "Review the employee's remote-work arrangement against the team's needs and policy limits.",
+                    "Approve or adjust remote days with the employee before the work schedule is finalized.",
+                    "Ensure any critical client meetings still follow the remote-work restrictions.",
+                ]
+            requires_human_review = True
+        else:
+            intent = "general"
+            summary = "Review the relevant policy text above, then follow the approval path described in the source material."
+            base_steps = [
+                "Review the most relevant policy passage above to confirm the rule or requirement.",
+                "If the issue depends on a personal status, manager approval, or an exception, contact the right team for confirmation.",
+            ]
+            requires_human_review = False
+
+        if not sources:
+            confidence = "low"
+        elif any(
+            trigger in combined_text
+            for trigger in (
+                "hr portal",
+                "three working days",
+                "security team",
+                "company vpn",
+                "mfa",
+                "strong password",
+                "remote work",
+                "reporting manager",
+            )
+        ):
+            confidence = "high"
+        else:
+            confidence = "medium"
+
+        return {
+            "intent": intent,
+            "summary": summary,
+            "next_steps": base_steps,
+            "confidence": confidence,
+            "requires_human_review": requires_human_review,
+            "audience": role,
+        }
+
     def answer(
         self,
         question: str,
         top_k: Optional[int] = None,
         return_sources: bool = False,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        include_action_plan: bool = False,
+        user_role: Optional[str] = None,
     ) -> Any:
-        sources = self.query(question, top_k=top_k)
+        retrieval_question, conversation_context = self._prepare_conversation_context(
+            question, conversation_history
+        )
+        sources = self.query(retrieval_question, top_k=top_k)
 
         if not sources:
             response = "I couldn't find that information in the available documents."
+            if include_action_plan:
+                action_plan = self.build_action_plan(question, [])
+                return (
+                    (response, [], action_plan)
+                    if return_sources
+                    else (response, action_plan)
+                )
             return (response, []) if return_sources else response
 
         context = "\n\n---\n\n".join(source["text"] for source in sources)
@@ -439,18 +635,36 @@ class RAGSystem:
                     "You are a helpful company policy assistant. "
                     "Answer using only the context provided below. "
                     "If the answer is not in the context, say exactly: 'I couldn't find that information in the available documents.'\n\n"
-                    f"Context:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"
+                    f"Context:\n{context}\n\n"
+                    + (
+                        "Recent conversation (use only to resolve references in the current question; "
+                        "do not treat it as factual evidence):\n"
+                        f"{conversation_context}\n\n"
+                        if conversation_context
+                        else ""
+                    )
+                    + f"Question:\n{question}\n\nAnswer:"
                 )
                 response = client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=prompt,
                 )
                 answer = getattr(response, "text", str(response))
+                action_plan = self.build_action_plan(question, sources, user_role=user_role)
+                if include_action_plan:
+                    if return_sources:
+                        return (answer, sources, action_plan)
+                    return (answer, action_plan)
                 return (answer, sources) if return_sources else answer
             except Exception:
                 pass
 
-        answer = self._fallback_answer(question, sources)
+        answer = self._fallback_answer(retrieval_question, sources)
+        action_plan = self.build_action_plan(question, sources, user_role=user_role)
+        if include_action_plan:
+            if return_sources:
+                return (answer, sources, action_plan)
+            return (answer, action_plan)
         return (answer, sources) if return_sources else answer
 
 

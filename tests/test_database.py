@@ -75,6 +75,64 @@ def test_feedback_cannot_be_saved_for_another_role(tmp_path):
         save_feedback(conversation_id, "user", 2, database_path)
 
 
+def test_feedback_reason_is_persisted_and_validated(tmp_path):
+    database_path = tmp_path / "assistant.sqlite3"
+    conversation_id = save_conversation("user", "Question", "Answer", [], database_path)
+
+    save_feedback(
+        conversation_id,
+        "user",
+        0,
+        database_path,
+        reason="Outdated",
+    )
+
+    history = load_conversation_history("user", database_path)
+    assert history[0]["feedback"] == 0
+    assert history[0]["feedback_reason"] == "Outdated"
+
+    with pytest.raises(ValueError, match="not recognized"):
+        save_feedback(conversation_id, "user", 0, database_path, reason="Confusing")
+    with pytest.raises(ValueError, match="only allowed for not helpful"):
+        save_feedback(conversation_id, "user", 1, database_path, reason="Unclear")
+
+
+def test_existing_feedback_table_is_migrated_without_losing_ratings(tmp_path):
+    database_path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE conversations (
+                id INTEGER PRIMARY KEY,
+                role TEXT NOT NULL,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                sources_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE feedback (
+                conversation_id INTEGER PRIMARY KEY,
+                rating INTEGER NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            INSERT INTO conversations
+                VALUES (1, 'user', 'Question', 'Answer', '[]', '2026-01-01T00:00:00+00:00');
+            INSERT INTO feedback VALUES (1, 0, '2026-01-01T00:00:00+00:00');
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    history = load_conversation_history("user", database_path)
+    assert history[0]["feedback"] == 0
+    assert history[0]["feedback_reason"] is None
+
+    save_feedback(1, "user", 0, database_path, reason="Incomplete")
+    assert load_conversation_history("user", database_path)[0]["feedback_reason"] == "Incomplete"
+
+
 def test_login_session_token_is_hashed_and_revocable(tmp_path):
     database_path = tmp_path / "assistant.sqlite3"
     token, expires_at = create_login_session("admin", database_path)

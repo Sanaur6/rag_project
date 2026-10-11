@@ -35,6 +35,10 @@ def require_access_token(
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, description="Question to ask the RAG system.")
     top_k: int = Field(default=3, ge=1, le=10, description="Number of relevant chunks to retrieve.")
+    user_role: str | None = Field(
+        default=None,
+        description="Optional audience for tailor-made policy guidance: employee, manager, hr, or it.",
+    )
 
 
 def get_rag() -> RAGSystem:
@@ -67,9 +71,16 @@ def health() -> dict[str, Any]:
 @app.post("/ask", dependencies=[Depends(require_access_token)])
 def ask(request: AskRequest) -> dict[str, Any]:
     rag = get_rag()
-    answer, sources = rag.answer(request.question, top_k=request.top_k, return_sources=True)
+    answer, sources, action_plan = rag.answer(
+        request.question,
+        top_k=request.top_k,
+        return_sources=True,
+        include_action_plan=True,
+        user_role=request.user_role,
+    )
     return {
         "answer": answer,
+        "action_plan": action_plan,
         "sources": [
             {
                 "source": source.get("source", "unknown"),
