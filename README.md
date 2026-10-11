@@ -20,6 +20,37 @@ This project is a small document-based RAG system for company policies and emplo
 
 ## Quick start
 
+### Option A: React frontend (recommended for a faster UI)
+
+1. Create a virtual environment and install dependencies:
+
+   ```bash
+   python -m venv .venv
+   . .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. Start the FastAPI backend:
+
+   ```bash
+   uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+3. In a second terminal, install and run the React app:
+
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env
+   npm run dev
+   ```
+
+   Set `VITE_API_BASE_URL` and `VITE_API_TOKEN` in `frontend/.env` to match your backend. The token must match the `APP_ACCESS_TOKEN` configured in the Python environment.
+
+4. Open `http://localhost:3000` in the browser.
+
+### Option B: Original Streamlit app
+
 1. Create a virtual environment and install dependencies:
 
    ```bash
